@@ -8,3 +8,4 @@ const app = createApp();
 app.listen(PORT, () => {
   console.log(`cliff-guard-api listening on http://localhost:${PORT}`);
 });
+

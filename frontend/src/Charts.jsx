@@ -68,8 +68,8 @@ export function PeriodBreakdown({ periodTotals, colors }) {
           <div className="row"><span><i className="dot" style={{ background: colors[p.periodId] }} aria-hidden="true" />{p.label}</span><strong>{fmt(p.kwh)} kWh</strong></div>
           <div className="bar" role="presentation"><span style={{ width: `${Math.min(100, p.sharePercent || 0)}%`, background: colors[p.periodId] }} /></div>
           <div className="row muted small">
-            <span>{fmt(p.sharePercent, 1)}% of use</span>
-            <span>{p.estimatedEnergyCharge == null ? 'Charge not calculated' : `Est. energy charge ${fmt(p.estimatedEnergyCharge)}`}</span>
+            <span>{fmt(p.sharePercent, 1)}% of your use</span>
+            <span>{p.estimatedEnergyCharge == null ? 'Cost not estimated' : `Est. cost ${fmt(p.estimatedEnergyCharge)}`}</span>
           </div>
         </li>
       ))}

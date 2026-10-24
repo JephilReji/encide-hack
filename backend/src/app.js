@@ -13,11 +13,11 @@ const adviceRoutes = require('./routes/advice');
 function createApp() {
   const app = express();
 
-  app.use(
-    cors({
-      origin: 'http://localhost:5173',
-    })
-  );
+  app.use(cors({ origin: [
+    'http://localhost:5173',
+    'https://localhost',        // Capacitor Android
+    'http://localhost'
+  ]}));
   app.use(express.json({ limit: '1mb' }));
 
   app.use('/api', healthRoutes);

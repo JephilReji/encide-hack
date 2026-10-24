@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cliff Guard</string>
+    <string name="title_activity_main">Cliff Guard</string>
+    <string name="package_name">com.cliffguard.app</string>
+    <string name="custom_url_scheme">com.cliffguard.app</string>
+</resources>

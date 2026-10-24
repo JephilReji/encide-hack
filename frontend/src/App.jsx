@@ -6,155 +6,146 @@ import Optimizer from './Optimizer.jsx';
 import Insights from './Insights.jsx';
 
 const PALETTE = ['#5b8aa6', '#d9791b', '#1f7a6d', '#8a6bb0'];
-
+const TABS = [
+  { id: 'home', label: 'Home', icon: '🏠', title: 'Your electricity' },
+  { id: 'usage', label: 'Usage', icon: '📊', title: 'When you use power' },
+  { id: 'save', label: 'Save', icon: '💰', title: 'Save on your bill' },
+  { id: 'tips', label: 'Tips', icon: '💡', title: 'Advice for you' },
+];
 const warningParts = (w) => (typeof w === 'string'
   ? { title: w }
-  : { title: w.title || w.message || w.id || 'Threshold warning', body: w.explanation || (w.title ? w.message : ''), severity: w.severity, ts: w.timestamp });
+  : { title: w.title || w.message || w.id || 'Heads up', body: w.explanation || (w.title ? w.message : ''), severity: w.severity });
+
+const tabFromHash = () => (TABS.find((t) => `#${t.id}` === window.location.hash) || TABS[0]).id;
 
 export default function App() {
+  const [tab, setTab] = useState(tabFromHash);
   const [boot, setBoot] = useState({ status: 'loading' });
-  const [scenarioId, setScenarioId] = useState('');
   const [data, setData] = useState({ status: 'idle' });
   const [date, setDate] = useState('');
   const [mode, setMode] = useState('day');
 
-  const init = useCallback(async () => {
-    setBoot({ status: 'loading' });
-    try {
-      const [, sc, tariff] = await Promise.all([api.health(), api.getScenarios(), api.getTariff()]);
-      setBoot({ status: 'ready', scenarios: sc.scenarios || [], tariff });
-      setScenarioId((cur) => cur || sc.scenarios?.[0]?.id || '');
-    } catch (err) { setBoot({ status: 'error', error: err }); }
+  useEffect(() => { // hash routing so the phone/browser back button moves between pages
+    const on = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
   }, []);
-  useEffect(() => { init(); }, [init]);
+  const go = (id) => { window.location.hash = id; window.scrollTo(0, 0); };
 
-  const tariff = boot.tariff;
   const load = useCallback(async () => {
-    if (!scenarioId || !tariff) return;
+    setBoot({ status: 'loading' });
     setData({ status: 'loading' });
     try {
+      const [, sc, tariff] = await Promise.all([api.health(), api.getScenarios(), api.getTariff()]);
+      const scenarioId = sc.scenarios?.[0]?.id; // first scenario is the default per the contract
+      if (!scenarioId) throw new Error('No usage data is available yet.');
       const [readings, analysis] = await Promise.all([api.getReadings(scenarioId), api.analyze(scenarioId, tariff.profileId)]);
       const withFlex = readings.records.find((r) => r.shiftableLoadKwh > 0);
       setDate(withFlex ? dateOf(withFlex.timestamp) : analysis.dailyTotals?.[0]?.date || '');
+      setBoot({ status: 'ready', scenarioId, tariff });
       setData({ status: 'ready', readings, analysis });
-    } catch (err) { setData({ status: 'error', error: err }); }
-  }, [scenarioId, tariff]);
+    } catch (err) { setBoot({ status: 'error', error: err }); setData({ status: 'idle' }); }
+  }, []);
   useEffect(() => { load(); }, [load]);
 
+  const tariff = boot.tariff;
   const colors = useMemo(() => Object.fromEntries((tariff?.periods || []).map((p, i) => [p.id, PALETTE[i % PALETTE.length]])), [tariff]);
-  const scenario = boot.scenarios?.find((s) => s.id === scenarioId);
-  const isTest = scenario && (/^dev/i.test(scenario.id) || /test/i.test(`${scenario.label} ${scenario.description}`));
   const a = data.analysis;
-  const simulated = (a?.dataSource || scenario?.dataSource || 'simulated') === 'simulated';
+  const ready = boot.status === 'ready' && data.status === 'ready' && a;
+  const current = TABS.find((t) => t.id === tab);
+  const dayPicker = ready && (
+    <label className="inline">Day
+      <select value={date} onChange={(e) => setDate(e.target.value)}>
+        {a.dailyTotals.map((d) => <option key={d.date} value={d.date}>{d.date}</option>)}
+      </select>
+    </label>
+  );
 
   return (
-    <>
-      <a className="skip" href="#main">Skip to dashboard</a>
+    <div className="app">
       <header className="top">
-        <div>
-          <h1>Cliff Guard</h1>
-          <p className="muted">See when your home uses power, and what shifting it would cost.</p>
-        </div>
-        {simulated && <span className="sim" role="status">SIMULATED DATA</span>}
+        <h1>{current.title}</h1>
+        <span className="sim" role="status">SIMULATED DATA</span>
       </header>
 
       <main id="main">
-        {boot.status === 'loading' && <Loading label="Connecting to the Cliff Guard API…" />}
-        {boot.status === 'error' && <ErrorBox title="Can’t load Cliff Guard" error={boot.error} onRetry={init} />}
+        {boot.status === 'loading' && <Loading label="Getting your electricity details…" />}
+        {boot.status === 'error' && <ErrorBox title="We couldn’t load your details" error={boot.error} onRetry={load} />}
 
-        {boot.status === 'ready' && (
+        {ready && tab === 'home' && (
           <>
-            <div className="toolbar">
-              <fieldset className="scenarios">
-                <legend>Dataset</legend>
-                {boot.scenarios.map((s) => (
-                  <label key={s.id} className={s.id === scenarioId ? 'pick on' : 'pick'}>
-                    <input type="radio" name="scenario" checked={s.id === scenarioId} onChange={() => setScenarioId(s.id)} />
-                    <span><strong>{s.label}</strong><br /><span className="small muted">{s.description} · {s.recordCount} records</span></span>
-                  </label>
-                ))}
-              </fieldset>
-              <div className={tariff.verificationStatus === 'verified' ? 'tariff' : 'tariff warn'}>
-                <strong>{tariff.displayName}</strong> <span className="badge">{tariff.verificationStatus}</span>
-                <p className="small">{tariff.eligibilityNote}</p>
-                {tariff.verificationStatus !== 'verified' && <p className="small"><strong>Not an official KSEB bill.</strong> Rates in this profile are illustrative and charges are estimates only.</p>}
-                <p className="small muted">{tariff.sourceName} · effective {tariff.effectiveFrom} to {tariff.effectiveTo}</p>
-              </div>
+            <div className="hero-stat">
+              <span>You used</span>
+              <strong>{fmt(a.summary.totalKwh, 1)} units</strong>
+              <span>of electricity (1 unit = 1 kWh)</span>
             </div>
-
-            {isTest && <p className="notice" role="note">This is a short test dataset, not a full-month history. Use it to check patterns, not to forecast a 30-day bill.</p>}
-
-            {data.status === 'loading' && <Loading label="Analysing readings…" />}
-            {data.status === 'error' && <ErrorBox title="Could not analyse this dataset" error={data.error} onRetry={load} />}
-            {data.status === 'ready' && a && (
-              <>
-                <div className="cards">
-                  <Stat label="Total consumption" value={`${fmt(a.summary.totalKwh)} kWh`} sub={`${a.recordCount} hourly records`} />
-                  <Stat label="Daily average" value={`${fmt(a.summary.averageDailyKwh)} kWh`} sub={`Highest day ${fmt(a.summary.highestDailyKwh)} kWh`} />
-                  <Stat label="Peak usage hour" value={hourLabel(a.summary.peakHour)} sub="Highest average hour of day" />
-                  {a.forecast && (
-                    <Stat label="Cycle projection"
-                      value={a.forecast.available ? `${fmt(a.forecast.projectedCycleKwh, 1)} kWh` : 'Not available'}
-                      sub={a.forecast.notice || a.forecast.method} />
-                  )}
-                </div>
-
-                <Card id="h-hourly" title="Hourly consumption" className="hero"
-                  action={
-                    <div className="controls">
-                      <div className="seg" role="group" aria-label="Hourly view">
-                        <button aria-pressed={mode === 'day'} onClick={() => setMode('day')}>Selected day</button>
-                        <button aria-pressed={mode === 'avg'} onClick={() => setMode('avg')}>Average by hour</button>
-                      </div>
-                      {mode === 'day' && (
-                        <label className="inline">Day
-                          <select value={date} onChange={(e) => setDate(e.target.value)}>
-                            {a.dailyTotals.map((d) => <option key={d.date} value={d.date}>{d.date}</option>)}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                  }>
-                  <PeriodLegend periods={tariff.periods} colors={colors} />
-                  <HourlyChart mode={mode} records={data.readings.records} date={date} hourlyAverages={a.hourlyAverages} tariff={tariff} colors={colors} />
-                </Card>
-
-                <div className="grid2">
-                  <Card id="h-daily" title="Daily consumption"><DailyChart dailyTotals={a.dailyTotals} date={date} onSelect={(d) => { setDate(d); setMode('day'); }} /></Card>
-                  <Card id="h-periods" title="Consumption by tariff period"><PeriodBreakdown periodTotals={a.periodTotals} colors={colors} /></Card>
-                </div>
-
-                <Card id="h-warn" title="Threshold warnings">
-                  {a.thresholdWarnings?.length ? (
-                    <ul className="warnings">
-                      {a.thresholdWarnings.map((w, i) => {
-                        const p = warningParts(w);
-                        return <li key={i}><strong>{p.title}</strong>{p.severity && <span className="badge warn">{p.severity}</span>}{p.body && <p className="small">{p.body}</p>}{p.ts && <p className="small muted">{p.ts}</p>}</li>;
-                      })}
-                    </ul>
-                  ) : <Empty>No threshold warnings for this dataset. {tariff.thresholds?.length ? '' : 'The active tariff profile has no confirmed thresholds configured, so none can be checked.'}</Empty>}
-                </Card>
-
-                <div className="grid2">
-                  <Card id="h-opt" title="Try shifting flexible load">
-                    <p className="muted small">Pick an hour with flexible load and a new hour on {date}. The backend recalculates the cost; total kWh stays the same.</p>
-                    <Optimizer scenarioId={scenarioId} tariff={tariff} records={data.readings.records} date={date} />
-                  </Card>
-                  <Card id="h-ai" title="AI insights">
-                    <Insights scenarioId={scenarioId} tariffProfileId={tariff.profileId} findings={a.findings} />
-                  </Card>
-                </div>
-
-                {a.assumptions?.length > 0 && <p className="muted small foot">Assumptions: {a.assumptions.join(' · ')}. Costs shown are energy-charge estimates, not a complete bill.</p>}
-              </>
-            )}
+            <div className="cards">
+              <Stat label="Average per day" value={`${fmt(a.summary.averageDailyKwh)} units`} />
+              <Stat label="Busiest time of day" value={hourLabel(a.summary.peakHour)} />
+              <Stat label="Heaviest day" value={`${fmt(a.summary.highestDailyKwh)} units`} />
+              {a.forecast?.available && <Stat label="Expected this bill cycle" value={`${fmt(a.forecast.projectedCycleKwh, 0)} units`} note={a.forecast.notice} />}
+            </div>
+            <Card id="h-warn" title="Alerts">
+              {a.thresholdWarnings?.length ? (
+                <ul className="warnings">
+                  {a.thresholdWarnings.map((w, i) => { const p = warningParts(w); return <li key={i}><strong>{p.title}</strong>{p.body && <p className="small">{p.body}</p>}</li>; })}
+                </ul>
+              ) : <p className="good-msg">✅ No alerts. Your usage is within the limits we can check.</p>}
+            </Card>
+            <button className="nav-card" onClick={() => go('save')}>💰 <span><strong>See how to save money</strong><br /><span className="small muted">Try moving an appliance to a cheaper time</span></span></button>
+            <button className="nav-card" onClick={() => go('tips')}>💡 <span><strong>Get advice</strong><br /><span className="small muted">Plain-language tips based on your usage</span></span></button>
+            <p className="muted small">Costs are estimates of the energy charge only. They are not your official KSEB bill.{tariff.verificationStatus !== 'verified' && ' The rates used here are for illustration.'}</p>
           </>
         )}
+
+        {ready && tab === 'usage' && (
+          <>
+            <Card id="h-hourly" title="Hour by hour"
+              action={<div className="seg" role="group" aria-label="Hourly view">
+                <button aria-pressed={mode === 'day'} onClick={() => setMode('day')}>One day</button>
+                <button aria-pressed={mode === 'avg'} onClick={() => setMode('avg')}>Typical day</button>
+              </div>}>
+              {mode === 'day' && dayPicker}
+              <p className="muted small">Taller bars mean more electricity used in that hour.</p>
+              <PeriodLegend periods={tariff.periods} colors={colors} />
+              <HourlyChart mode={mode} records={data.readings.records} date={date} hourlyAverages={a.hourlyAverages} tariff={tariff} colors={colors} />
+            </Card>
+            <Card id="h-daily" title="Day by day">
+              <p className="muted small">Tap a day to see its hours.</p>
+              <DailyChart dailyTotals={a.dailyTotals} date={date} onSelect={(d) => { setDate(d); setMode('day'); }} />
+            </Card>
+            <Card id="h-periods" title="Costly vs cheaper hours">
+              <PeriodBreakdown periodTotals={a.periodTotals} colors={colors} />
+            </Card>
+          </>
+        )}
+
+        {ready && tab === 'save' && (
+          <Card id="h-opt" title="Move power use to a cheaper time">
+            <p className="muted small">Choose an appliance hour you could shift (like a washing machine run) and a new time. The same electricity is used; only the time changes.</p>
+            {dayPicker}
+            <Optimizer scenarioId={boot.scenarioId} tariff={tariff} records={data.readings.records} date={date} />
+          </Card>
+        )}
+
+        {ready && tab === 'tips' && (
+          <Card id="h-ai" title="Your advice">
+            <Insights scenarioId={boot.scenarioId} tariffProfileId={tariff.profileId} findings={a.findings} />
+          </Card>
+        )}
       </main>
-    </>
+
+      <nav className="tabbar" aria-label="Main">
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => go(t.id)} aria-current={t.id === tab ? 'page' : undefined}>
+            <span aria-hidden="true">{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </nav>
+    </div>
   );
 }
 
-function Stat({ label, value, sub }) {
-  return <div className="stat"><span className="muted small">{label}</span><strong>{value}</strong><span className="small muted">{sub}</span></div>;
+function Stat({ label, value, note }) {
+  return <div className="stat"><span className="muted small">{label}</span><strong>{value}</strong>{note && <span className="small muted">{note}</span>}</div>;
 }

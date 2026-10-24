@@ -1,0 +1,6 @@
+{
+  "appId": "com.cliffguard.app",
+  "appName": "Cliff Guard",
+  "webDir": "dist",
+  "server": { "androidScheme": "https", "cleartext": true }
+}

@@ -42,7 +42,7 @@ export default function Optimizer({ scenarioId, tariff, records, date }) {
     } catch (err) { setState({ status: 'error', error: err }); }
   }
 
-  if (!sources.length) return <Empty>No flexible load recorded on {date}. Pick another day in the chart above to test a shift.</Empty>;
+  if (!sources.length) return <Empty>Nothing movable on {date}. Choose another day above.</Empty>;
   const max = source ? source.shiftableLoadKwh : 0;
   const invalid = !source || !targetTs || !(Number(shiftKwh) > 0) || Number(shiftKwh) > max + 1e-9;
   const r = state.result;
@@ -50,38 +50,38 @@ export default function Optimizer({ scenarioId, tariff, records, date }) {
   return (
     <div>
       <form className="form" onSubmit={run}>
-        <label>Move from
+        <label>Appliance hour to shift
           <select value={sourceTs} onChange={(e) => setSourceTs(e.target.value)}>
-            {sources.map((s) => <option key={s.timestamp} value={s.timestamp}>{slot(s)} ({fmt(s.shiftableLoadKwh, 3)} kWh flexible)</option>)}
+            {sources.map((s) => <option key={s.timestamp} value={s.timestamp}>{slot(s)} ({fmt(s.shiftableLoadKwh, 3)} kWh movable)</option>)}
           </select>
         </label>
-        <label>Move to
+        <label>Shift it to
           <select value={targetTs} onChange={(e) => setTargetTs(e.target.value)}>
             {dayRecords.filter((x) => x.timestamp !== sourceTs).map((t) => <option key={t.timestamp} value={t.timestamp}>{slot(t)}</option>)}
           </select>
         </label>
-        <label>Shiftable energy: <strong>{fmt(Number(shiftKwh), 3)} kWh</strong>
+        <label>Amount to shift: <strong>{fmt(Number(shiftKwh), 3)} units</strong>
           <input type="range" min="0.01" max={max || 1} step="0.01" value={shiftKwh} onChange={(e) => setShiftKwh(e.target.value)} />
-          <span className="muted small">Up to {fmt(max, 3)} kWh available at the source hour</span>
+          <span className="muted small">You can shift up to {fmt(max, 3)} units from this hour</span>
         </label>
-        <button className="btn primary" disabled={invalid || state.status === 'loading'}>Compare cost</button>
+        <button className="btn primary" disabled={invalid || state.status === 'loading'}>See my saving</button>
       </form>
 
       <div aria-live="polite">
-        {state.status === 'loading' && <Loading label="Calculating on the server…" />}
-        {state.status === 'error' && <ErrorBox title="Could not compare this shift" error={state.error} />}
+        {state.status === 'loading' && <Loading label="Working out your saving…" />}
+        {state.status === 'error' && <ErrorBox title="We couldn’t work that out" error={state.error} />}
         {state.status === 'done' && r && (
           <div className="result">
-            <p className="muted small">{periodName(r.sourcePeriod)} → {periodName(r.targetPeriod)} · total energy {fmt(r.totalKwhBefore, 3)} kWh before, {fmt(r.totalKwhAfter, 3)} kWh after (unchanged load, only the time moves)</p>
+            <p className="muted small">{periodName(r.sourcePeriod)} → {periodName(r.targetPeriod)} · total {fmt(r.totalKwhBefore, 3)} units before, {fmt(r.totalKwhAfter, 3)} units after (same electricity, different time)</p>
             <div className="ba">
-              <div><span className="muted small">Before</span><strong>{money(r.estimatedEnergyChargeBefore, r.currency)}</strong></div>
-              <div><span className="muted small">After</span><strong>{money(r.estimatedEnergyChargeAfter, r.currency)}</strong></div>
+              <div><span className="muted small">Now</span><strong>{money(r.estimatedEnergyChargeBefore, r.currency)}</strong></div>
+              <div><span className="muted small">After shifting</span><strong>{money(r.estimatedEnergyChargeAfter, r.currency)}</strong></div>
               <div className={r.estimatedSavings > 0 ? 'save good' : 'save'}>
-                <span className="muted small">Estimated saving</span>
+                <span className="muted small">You could save</span>
                 <strong>{typeof r.estimatedSavings === 'number' && r.estimatedSavings > 0 ? money(r.estimatedSavings, r.currency) : 'None'}</strong>
               </div>
             </div>
-            {!(r.estimatedSavings > 0) && <p className="notice">This move does not reduce the estimated energy charge, so no saving is claimed.</p>}
+            {!(r.estimatedSavings > 0) && <p className="notice">This change wouldn’t lower your estimated charge, so we aren’t claiming a saving.</p>}
             {(r.note || r.explanation || r.message) && <p className="small">{r.note || r.explanation || r.message}</p>}
           </div>
         )}
