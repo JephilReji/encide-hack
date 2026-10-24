@@ -1,0 +1,36 @@
+{
+  "profileId": "kseb-domestic-demo",
+  "displayName": "KSEB domestic ToD demo profile (illustrative)",
+  "verificationStatus": "illustrative",
+  "effectiveFrom": "2024-05-01",
+  "effectiveTo": "2026-12-31",
+  "sourceName": "Illustrative ToD structure for demo — not an official KSEB bill calculator",
+  "eligibilityNote": "Hackathon demo only. Multipliers illustrate peak/off-peak relative costs for ToD-style meters; not verified for any consumer category, slab, or official energy charge. Do not treat estimates as a complete KSEB bill.",
+  "billingCycleDays": 60,
+  "currency": "INR",
+  "illustrativeBaseRateInrPerKwh": 6.0,
+  "periods": [
+    {
+      "id": "normal_daytime",
+      "label": "Normal daytime",
+      "startHour": 6,
+      "endHour": 18,
+      "multiplier": 0.9
+    },
+    {
+      "id": "peak",
+      "label": "Peak",
+      "startHour": 18,
+      "endHour": 22,
+      "multiplier": 1.25
+    },
+    {
+      "id": "off_peak",
+      "label": "Off-peak",
+      "startHour": 22,
+      "endHour": 6,
+      "multiplier": 1.0
+    }
+  ],
+  "thresholds": []
+}
